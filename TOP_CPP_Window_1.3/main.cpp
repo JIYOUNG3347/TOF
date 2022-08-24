@@ -27,7 +27,6 @@ using namespace cv;
 using namespace ComLib;
 
 
-
 // Command format
 const char cmd_get_dis_amp[14] = { 0xF5, 0x22, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0xE9, 0xDF, 0xE8, 0x9E };
 
@@ -41,22 +40,20 @@ int BAUDRATE = 10000000;	// Do not change values
 bool running;
 
 // function declaration
-bool checkPck(unsigned char* response_data, int calc_response_crc);		// CRC Check function
-vector<int> arr(unsigned char* Data, int start_pixcel_1, int start_pixcel_2, int outlier);			// Split data to Distance data and Amplitude data function, outlier handling, Normalize
-
+bool checkPck(unsigned char* response_data, int calc_response_crc);				// CRC Check function
+vector<int> arr(unsigned char* Data, int start_pixcel_1, int start_pixcel_2, int outlier);	// Split data to Distance data and Amplitude data function, outlier handling, Normalize
 
 
 int main()
 {
 
-
 	// variables
-	unsigned char response_data[38488] = {};							// Response data
-	int rxdata;															// Resposne data start byte
-	bool cmp;															// CRC Check 
+	unsigned char response_data[38488] = {};						// Response data
+	int rxdata;										// Resposne data start byte
+	bool cmp;										// CRC Check 
 
-	vector<int> dis_arr;												// Distance data array
-	vector<int> amp_arr;												// Amplitude ata array
+	vector<int> dis_arr;									// Distance data array
+	vector<int> amp_arr;									// Amplitude ata array
 
 	
 	// Set Serial Port, BAUDRATE
@@ -74,11 +71,11 @@ int main()
 
 	while (running) {
 
-		ser.WriteBuffer(cmd_get_dis_amp, 14);							// Command format
-		ser.ReadBuffer(response_data, 38488, -1);						// Resposnse format -> start byte (1), type (1), length (2), header data (80), ~, crc (4)
+		ser.WriteBuffer(cmd_get_dis_amp, 14);						// Command format
+		ser.ReadBuffer(response_data, 38488, -1);					// Resposnse format -> start byte (1), type (1), length (2), header data (80), ~, crc (4)
 
 		
-		rxdata = response_data[0];										// start byte
+		rxdata = response_data[0];							// start byte
 
 
 		// Start byte check
@@ -104,7 +101,6 @@ int main()
 			}
 
 
-
 			// Mat Data
 			Mat dis_mat = (Mat)dis_arr;
 			Mat amp_mat = (Mat)amp_arr;
@@ -126,12 +122,8 @@ int main()
 
 			vconcat(dis_mat_reshaped, amp_mat_reshaped, img);
 
-
 			imshow("img", img);
-
-
-
-
+			
 
 			if (waitKey(1) == ('q'))
 				break;
