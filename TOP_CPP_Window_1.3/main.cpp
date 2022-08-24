@@ -95,8 +95,8 @@ int main()
 
 			// Split data to Distance data and Amplitude data
 			try {
-				dis_arr = arr(response_data, 1, 0, 8000.0);
-				amp_arr = arr(response_data, 3, 2, 2000.0);
+				dis_arr = arr(response_data, 1, 0, 8000);
+				amp_arr = arr(response_data, 3, 2, 2000);
 			}
 			catch (...)
 			{
