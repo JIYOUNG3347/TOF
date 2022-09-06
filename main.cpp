@@ -12,8 +12,6 @@
 #include <iterator>
 #include <sstream>
 #include <fstream>
-#include <iomanip>
-#include <chrono>
 
 // opencv Includes
 #include "opencv2/core.hpp"
@@ -55,34 +53,16 @@ constexpr float NMS_THRESHOLD = 0.6;
 constexpr int NUM_CLASSES = 1;
 
 
-// colors for bounding boxes
-const cv::Scalar colors[] = {
-	{0, 255, 255},
-	{255, 255, 0},
-	{255, 255, 0},
-	{255, 0, 0}
-};
-const auto NUM_COLORS = sizeof(colors) / sizeof(colors[0]);
-
-
-
 int main()
 {
 	std::vector<std::string> class_names;
-	{
-		std::ifstream class_file("obj.txt");
-		if (!class_file)
-		{
-			std::cerr << "failed to open classes.txt\n";
-			return 0;
-		}
+	// get labels of all classes
+	string classesFile = "obj.names";
+	ifstream ifs(classesFile.c_str());
+	string line;
+	while (getline(ifs, line)) class_names.push_back(line);
 
-		std::string line;
-		while (std::getline(class_file, line))
-			class_names.push_back(line);
-	}
 
-	
 
 	// variables
 	unsigned char response_data[38488] = {};							// Response data
@@ -118,7 +98,7 @@ int main()
 		ser.WriteBuffer(cmd_get_dis_amp, 14);							// Command format
 		ser.ReadBuffer(response_data, 38488, -1);						// Resposnse format -> start byte (1), type (1), length (2), header data (80), ~, crc (4)
 
-		
+
 		rxdata = response_data[0];										// start byte
 
 
@@ -127,9 +107,6 @@ int main()
 
 			unsigned char crc_data[38484] = { 0, };
 			memcpy(crc_data, response_data, 38484);
-
-
-
 
 			// CRC packet check
 			uint32_t size = sizeof(crc_data) / sizeof(char);
@@ -151,8 +128,6 @@ int main()
 			}
 
 
-
-
 			// Mat Data
 			Mat dis_mat = (Mat)dis_arr;
 			Mat amp_mat = (Mat)amp_arr;
@@ -167,22 +142,20 @@ int main()
 
 
 			Mat dis_mat_reshaped = dis_mat.reshape(1, 60);
-			Mat amp_mat_reshaped = amp_mat.reshape(1, 60);
+			frame = amp_mat.reshape(1, 60);
 
-			resize(dis_mat_reshaped, dis_mat_reshaped, Size(0, 0), 5, 5, INTER_CUBIC);
-			resize(amp_mat_reshaped, frame, Size(150, 150), 0, 0, INTER_CUBIC);
 
 			auto total_start = std::chrono::steady_clock::now();
-			cv::dnn::blobFromImage(frame, blob, 1 / 255.f, cv::Size(150, 150), cv::Scalar(), true, false, CV_32F);
+			dnn::blobFromImage(frame, blob, 1 / 255.f, cv::Size(150, 150), cv::Scalar(), false, false);
+			
+
 			net.setInput(blob);
-
-			auto dnn_start = std::chrono::steady_clock::now();
 			net.forward(detections, output_names);
-			auto dnn_end = std::chrono::steady_clock::now();
 
-			std::vector<int> indices[NUM_CLASSES];
-			std::vector<cv::Rect> boxes[NUM_CLASSES];
-			std::vector<float> scores[NUM_CLASSES];
+
+			vector<int> indices[NUM_CLASSES];
+			vector<cv::Rect> boxes[NUM_CLASSES];
+			vector<float> scores[NUM_CLASSES];
 
 			for (auto& output : detections)
 			{
@@ -193,7 +166,7 @@ int main()
 					auto y = output.at<float>(i, 1) * frame.rows;
 					auto width = output.at<float>(i, 2) * frame.cols;
 					auto height = output.at<float>(i, 3) * frame.rows;
-					cv::Rect rect(x - width / 2, y - height / 2, width, height);
+					Rect rect(x - width / 2, y - height / 2, width, height);
 
 					for (int c = 0; c < NUM_CLASSES; c++)
 					{
@@ -208,42 +181,39 @@ int main()
 			}
 
 			for (int c = 0; c < NUM_CLASSES; c++)
-				cv::dnn::NMSBoxes(boxes[c], scores[c], 0.0, NMS_THRESHOLD, indices[c]);
+				dnn::NMSBoxes(boxes[c], scores[c], 0.0, NMS_THRESHOLD, indices[c]);
 
 			for (int c = 0; c < NUM_CLASSES; c++)
 			{
 				for (size_t i = 0; i < indices[c].size(); ++i)
 				{
-					const auto color = colors[c % NUM_COLORS];
+					const auto color = 255;
 
 					auto idx = indices[c][i];
 					const auto& rect = boxes[c][idx];
-					cv::rectangle(frame, cv::Point(rect.x, rect.y), cv::Point(rect.x + rect.width, rect.y + rect.height), color, 3);
+					cv::rectangle(frame, cv::Point(rect.x, rect.y), cv::Point(rect.x + rect.width, rect.y + rect.height), color, 1);
 
-					std::ostringstream label_ss;
+					ostringstream label_ss;
 					label_ss << class_names[c] << ": " << std::fixed << std::setprecision(2) << scores[c][idx];
 					auto label = label_ss.str();
 
 					int baseline;
 					auto label_bg_sz = cv::getTextSize(label.c_str(), cv::FONT_HERSHEY_COMPLEX_SMALL, 0.1, 1, &baseline);
-					cv::rectangle(frame, cv::Point(rect.x, rect.y - label_bg_sz.height - baseline - 10), cv::Point(rect.x + label_bg_sz.width, rect.y), color, cv::FILLED);
-					cv::putText(frame, label.c_str(), cv::Point(rect.x, rect.y - baseline - 5), cv::FONT_HERSHEY_COMPLEX_SMALL, 0.5, cv::Scalar(255, 255, 255));
+					cv::putText(frame, label.c_str(), cv::Point(rect.x, rect.y - baseline - 5), cv::FONT_HERSHEY_PLAIN, 0.5, cv::Scalar(255, 255, 255));
 				}
 			}
 
 			auto total_end = std::chrono::steady_clock::now();
 
-			float inference_fps = 1000.0 / std::chrono::duration_cast<std::chrono::milliseconds>(dnn_end - dnn_start).count();
 			float total_fps = 1000.0 / std::chrono::duration_cast<std::chrono::milliseconds>(total_end - total_start).count();
-			std::ostringstream stats_ss;
-			stats_ss << std::fixed << std::setprecision(2);
-			stats_ss << "FPS: " << total_fps;
-			auto stats = stats_ss.str();
+			//std::ostringstream stats_ss;
+			//stats_ss << std::fixed << std::setprecision(2);
+			//stats_ss << "FPS: " << total_fps;
+			//auto stats = stats_ss.str();
 
 			int baseline;
-			auto stats_bg_sz = cv::getTextSize(stats.c_str(), cv::FONT_HERSHEY_COMPLEX_SMALL, 1, 1, &baseline);
-			cv::putText(frame, stats.c_str(), cv::Point(0, stats_bg_sz.height + 5), cv::FONT_HERSHEY_COMPLEX_SMALL, 1, cv::Scalar(255, 255, 255));
-			resize(frame, frame, Size(0, 0), 5, 5, INTER_CUBIC);
+			//auto stats_bg_sz = cv::getTextSize(stats.c_str(), cv::FONT_HERSHEY_COMPLEX_SMALL, 1, 1, &baseline);
+			//cv::putText(frame, stats.c_str(), cv::Point(0, stats_bg_sz.height + 5), cv::FONT_HERSHEY_PLAIN, 0.5, 255);
 
 			cv::namedWindow("output");
 			cv::imshow("output", frame);
@@ -296,3 +266,4 @@ vector<int> arr(unsigned char* Data, int a, int b, float c) {
 	}
 	return arr;
 }
+
